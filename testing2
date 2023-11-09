@@ -1,0 +1,39 @@
+from flask import Flask, request
+import twilio.twiml
+import openai
+from elevenlabs import generate, set_api_key
+
+set_api_key("01fa8f6f55fb10162f2ac57073d26982")
+openai.api_key = "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"
+
+
+app = Flask(__name__)
+
+@app.route("/voice", methods=['POST'])
+def voice():
+    # Get the transcription from Twilio's request
+    text_transcription = request.values.get("TranscriptionText")
+
+    # If there's no transcription, return an empty response
+    if not text_transcription:
+        return str(twilio.twiml.VoiceResponse())
+
+    # Process the transcribed text with ChatGPT
+    chat_response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        prompt=f"You are an expert sales appointment setter, answer the questions the lead may have. Be helpful, encouraging, pleasant. User said: {text_transcription}"
+    ).choices[0].text.strip()
+
+    # Convert the ChatGPT response to voice using Eleven Labs with streaming
+    audio_stream = generate(chat_response, stream=True)
+    audio_chunks = [chunk for chunk in audio_stream]
+
+    # Create a Twilio response and play the audio response to the user
+    twilio_response = twilio.twiml.Response()
+    for audio_chunk in audio_chunks:
+        twilio_response.play(audio_chunk)
+
+    return str(twilio_response)
+
+if __name__ == "main":
+    app.run(debug=True)
